@@ -1,0 +1,16 @@
+# User-specific stuff
+README.md
+.claude/
+.idea/
+
+# Gradle
+.gradle/
+build/
+out/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
