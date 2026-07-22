@@ -1,12 +1,17 @@
 package org.seed.yggdrasil.aparsers.ksp
 
+import com.google.devtools.ksp.isAbstract
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSVisitorVoid
+import com.google.devtools.ksp.validate
+import java.io.Writer
 
 public class ParserProcessor(
     private val codeGenerator: CodeGenerator,
@@ -14,91 +19,115 @@ public class ParserProcessor(
     private val options: Map<String, String>,
 ) : SymbolProcessor {
 
-    private var isProcessed = false
-
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        if (isProcessed) return emptyList()
-
         val symbols = resolver.getSymbolsWithAnnotation("org.seed.yggdrasil.aparsers.AnimeSourceParser")
-        val classes = symbols.filterIsInstance<KSClassDeclaration>().toList()
-
-        if (classes.isNotEmpty()) {
-            generateSourceEnum(classes)
-            generateFactory(classes)
-            isProcessed = true
+        val ret = symbols.filterNot { it.validate() }.toList()
+        if (!symbols.iterator().hasNext()) {
+            return ret
         }
 
-        return emptyList()
-    }
+        val dependencies = Dependencies.ALL_FILES
 
-    private fun generateSourceEnum(classes: List<KSClassDeclaration>) {
-        val file = codeGenerator.createNewFile(
-            dependencies = Dependencies(false, *classes.mapNotNull { it.containingFile }.toTypedArray()),
-            packageName = "org.seed.yggdrasil.aparsers.model",
-            fileName = "AnimeParserSource",
-        )
-
-        file.writer().use { writer ->
-            writer.write("""
-                package org.seed.yggdrasil.aparsers.model
-
-                public enum class AnimeParserSource(
-                    public val nameKey: String,
-                    public val title: String,
-                    public val locale: String,
-                ) {
-            """.trimIndent())
-            writer.write("\n")
-
-            classes.forEachIndexed { index, cls ->
-                val annotation = cls.annotations.first { it.shortName.asString() == "AnimeSourceParser" }
-                val nameKey = annotation.getArgumentValue("nameKey") as String
-                val title = annotation.getArgumentValue("title") as String
-                val locale = annotation.getArgumentValue("locale") as String
-                val enumName = nameKey.uppercase()
-
-                val comma = if (index < classes.size - 1) "," else ";"
-                writer.write("    $enumName(\"$nameKey\", \"$title\", \"$locale\")$comma\n")
-            }
-
-            writer.write("}\n")
+        val factoryFile = try {
+            codeGenerator.createNewFile(
+                dependencies = dependencies,
+                packageName = "org.seed.yggdrasil.aparsers",
+                fileName = "AnimeParserFactory",
+            )
+        } catch (e: Exception) {
+            null
         }
+
+        val sourcesFile = try {
+            codeGenerator.createNewFile(
+                dependencies = dependencies,
+                packageName = "org.seed.yggdrasil.aparsers.model",
+                fileName = "AnimeParserSource",
+            )
+        } catch (e: Exception) {
+            null
+        }
+
+        sourcesFile?.writer().use { sourcesWriter ->
+            factoryFile?.writer().use { factoryWriter ->
+                writeContent(sourcesWriter, factoryWriter, symbols)
+            }
+        }
+
+        return ret
     }
 
-    private fun generateFactory(classes: List<KSClassDeclaration>) {
-        val file = codeGenerator.createNewFile(
-            dependencies = Dependencies(false, *classes.mapNotNull { it.containingFile }.toTypedArray()),
-            packageName = "org.seed.yggdrasil.aparsers",
-            fileName = "AnimeParserFactory",
+    private fun writeContent(
+        sourcesWriter: Writer?,
+        factoryWriter: Writer?,
+        symbols: Sequence<KSAnnotated>,
+    ) {
+        factoryWriter?.write(
+            """
+            package org.seed.yggdrasil.aparsers
+
+            import org.seed.yggdrasil.aparsers.model.AnimeParserSource
+
+            public object AnimeParserFactory {
+                public fun newParserInstance(source: AnimeParserSource, context: AnimeLoaderContext): AnimeParser = when (source) {
+
+            """.trimIndent()
         )
 
-        file.writer().use { writer ->
-            writer.write("""
-                package org.seed.yggdrasil.aparsers
+        sourcesWriter?.write(
+            """
+            package org.seed.yggdrasil.aparsers.model
 
-                import org.seed.yggdrasil.aparsers.model.AnimeParserSource
+            public enum class AnimeParserSource(
+                public val nameKey: String,
+                public val title: String,
+                public val locale: String,
+            ) {
 
-                public object AnimeParserFactory {
-                    public fun newParserInstance(source: AnimeParserSource, context: AnimeLoaderContext): AnimeParser {
-                        return when (source) {
-            """.trimIndent())
-            writer.write("\n")
+            """.trimIndent()
+        )
 
-            classes.forEach { cls ->
-                val annotation = cls.annotations.first { it.shortName.asString() == "AnimeSourceParser" }
-                val nameKey = annotation.getArgumentValue("nameKey") as String
-                val enumName = nameKey.uppercase()
-                val className = cls.qualifiedName?.asString() ?: return@forEach
+        val visitor = ParserVisitor(sourcesWriter, factoryWriter)
+        symbols
+            .filterIsInstance<KSClassDeclaration>()
+            .filter { it.validate() }
+            .forEach { it.accept(visitor, Unit) }
 
-                writer.write("            AnimeParserSource.$enumName -> $className(context)\n")
-            }
-
-            writer.write("""
-                        }
-                    }
+        factoryWriter?.write(
+            """
                 }
-            """.trimIndent())
-            writer.write("\n")
+            }
+            """.trimIndent()
+        )
+
+        sourcesWriter?.write(
+            """
+                ;
+            }
+            """.trimIndent()
+        )
+    }
+
+    private inner class ParserVisitor(
+        private val sourcesWriter: Writer?,
+        private val factoryWriter: Writer?,
+    ) : KSVisitorVoid() {
+
+        override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
+            if (classDeclaration.classKind != ClassKind.CLASS || classDeclaration.isAbstract()) {
+                logger.error("Only non-abstract class can be annotated with @AnimeSourceParser", classDeclaration)
+            }
+
+            val annotation = classDeclaration.annotations.single { it.shortName.asString() == "AnimeSourceParser" }
+            val nameKey = annotation.arguments.single { it.name?.asString() == "nameKey" }.value as String
+            val title = annotation.arguments.single { it.name?.asString() == "title" }.value as String
+            val locale = annotation.arguments.single { it.name?.asString() == "locale" }.value as String
+
+            val enumName = nameKey.uppercase()
+            val className = checkNotNull(classDeclaration.qualifiedName?.asString())
+
+            factoryWriter?.write("        AnimeParserSource.$enumName -> $className(context)\n")
+            sourcesWriter?.write("    $enumName(\"$nameKey\", \"$title\", \"$locale\"),\n")
         }
     }
 }

@@ -27,6 +27,7 @@ kotlin {
     jvmToolchain(17)
     explicitApiWarning()
     sourceSets["main"].kotlin.srcDirs("build/generated/ksp/main/kotlin")
+    sourceSets["test"].kotlin.srcDirs("build/generated/ksp/main/kotlin")
 }
 
 publishing {
