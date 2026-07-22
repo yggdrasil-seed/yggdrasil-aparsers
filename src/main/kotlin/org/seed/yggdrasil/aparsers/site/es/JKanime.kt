@@ -3,25 +3,28 @@ package org.seed.yggdrasil.aparsers.site.es
 import org.seed.yggdrasil.aparsers.AnimeLoaderContext
 import org.seed.yggdrasil.aparsers.AnimeSourceParser
 import org.seed.yggdrasil.aparsers.ParsedAnimeParser
+import org.seed.yggdrasil.aparsers.config.ConfigKey
 import org.seed.yggdrasil.aparsers.model.Anime
 import org.seed.yggdrasil.aparsers.model.AnimeListFilter
+import org.seed.yggdrasil.aparsers.model.AnimeParserSource
 import org.seed.yggdrasil.aparsers.model.AnimeStatus
 import org.seed.yggdrasil.aparsers.model.Episode
+import org.seed.yggdrasil.aparsers.model.SortOrder
 import org.seed.yggdrasil.aparsers.model.Video
 import org.seed.yggdrasil.aparsers.util.src
 
 @AnimeSourceParser(nameKey = "jkanime", title = "JKanime", locale = "es")
 internal class JKanime(context: AnimeLoaderContext) : ParsedAnimeParser(context) {
 
-    private val baseUrl = "https://jkanime.net"
+    override val configKeyDomain: ConfigKey.Domain = ConfigKey.Domain("jkanime.net")
 
-    override suspend fun getAnimeList(filter: AnimeListFilter): List<Anime> {
+    override suspend fun getList(offset: Int, order: SortOrder, filter: AnimeListFilter): List<Anime> {
         val page = filter.page
         val query = filter.query
         val url = if (!query.isNullOrBlank()) {
-            "$baseUrl/buscar/$query/$page/"
+            "https://$domain/buscar/$query/$page/"
         } else {
-            "$baseUrl/directorio/$page/"
+            "https://$domain/directorio/$page/"
         }
 
         val doc = fetchDocument(url)
@@ -36,7 +39,7 @@ internal class JKanime(context: AnimeLoaderContext) : ParsedAnimeParser(context)
             Anime(
                 id = href,
                 title = title,
-                url = if (href.startsWith("http")) href else "$baseUrl$href",
+                url = if (href.startsWith("http")) href else "https://$domain$href",
                 coverUrl = img,
             )
         }
@@ -66,7 +69,7 @@ internal class JKanime(context: AnimeLoaderContext) : ParsedAnimeParser(context)
                 id = href,
                 name = epName.ifBlank { "Episodio ${epNum.toInt()}" },
                 episodeNumber = epNum,
-                url = if (href.startsWith("http")) href else "$baseUrl$href",
+                url = if (href.startsWith("http")) href else "https://$domain$href",
             )
         }
     }

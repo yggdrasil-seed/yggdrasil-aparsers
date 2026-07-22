@@ -3,25 +3,28 @@ package org.seed.yggdrasil.aparsers.site.ru
 import org.seed.yggdrasil.aparsers.AnimeLoaderContext
 import org.seed.yggdrasil.aparsers.AnimeSourceParser
 import org.seed.yggdrasil.aparsers.ParsedAnimeParser
+import org.seed.yggdrasil.aparsers.config.ConfigKey
 import org.seed.yggdrasil.aparsers.model.Anime
 import org.seed.yggdrasil.aparsers.model.AnimeListFilter
+import org.seed.yggdrasil.aparsers.model.AnimeParserSource
 import org.seed.yggdrasil.aparsers.model.AnimeStatus
 import org.seed.yggdrasil.aparsers.model.Episode
+import org.seed.yggdrasil.aparsers.model.SortOrder
 import org.seed.yggdrasil.aparsers.model.Video
 import org.seed.yggdrasil.aparsers.util.src
 
 @AnimeSourceParser(nameKey = "animego", title = "AnimeGO", locale = "ru")
 internal class AnimeGO(context: AnimeLoaderContext) : ParsedAnimeParser(context) {
 
-    private val baseUrl = "https://animego.org"
+    override val configKeyDomain: ConfigKey.Domain = ConfigKey.Domain("animego.org")
 
-    override suspend fun getAnimeList(filter: AnimeListFilter): List<Anime> {
+    override suspend fun getList(offset: Int, order: SortOrder, filter: AnimeListFilter): List<Anime> {
         val page = filter.page
         val query = filter.query
         val url = if (!query.isNullOrBlank()) {
-            "$baseUrl/search/anime?q=$query&page=$page"
+            "https://$domain/search/anime?q=$query&page=$page"
         } else {
-            "$baseUrl/anime?page=$page"
+            "https://$domain/anime?page=$page"
         }
 
         val doc = fetchDocument(url)
@@ -36,7 +39,7 @@ internal class AnimeGO(context: AnimeLoaderContext) : ParsedAnimeParser(context)
             Anime(
                 id = href,
                 title = title,
-                url = if (href.startsWith("http")) href else "$baseUrl$href",
+                url = if (href.startsWith("http")) href else "https://$domain$href",
                 coverUrl = img,
             )
         }

@@ -95,6 +95,7 @@ public class ParserProcessor(
 
         factoryWriter?.write(
             """
+                else -> error("Unknown source: ${'$'}source")
                 }
             }
             """.trimIndent()

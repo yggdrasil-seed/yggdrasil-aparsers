@@ -3,26 +3,29 @@ package org.seed.yggdrasil.aparsers.site.en
 import org.seed.yggdrasil.aparsers.AnimeLoaderContext
 import org.seed.yggdrasil.aparsers.AnimeSourceParser
 import org.seed.yggdrasil.aparsers.ParsedAnimeParser
+import org.seed.yggdrasil.aparsers.config.ConfigKey
 import org.seed.yggdrasil.aparsers.extractor.KwikExtractor
 import org.seed.yggdrasil.aparsers.model.Anime
 import org.seed.yggdrasil.aparsers.model.AnimeListFilter
+import org.seed.yggdrasil.aparsers.model.AnimeParserSource
 import org.seed.yggdrasil.aparsers.model.AnimeStatus
 import org.seed.yggdrasil.aparsers.model.Episode
+import org.seed.yggdrasil.aparsers.model.SortOrder
 import org.seed.yggdrasil.aparsers.model.Video
 import org.seed.yggdrasil.aparsers.util.src
 
 @AnimeSourceParser(nameKey = "animepahe", title = "Animepahe", locale = "en")
 internal class Animepahe(context: AnimeLoaderContext) : ParsedAnimeParser(context) {
 
-    private val baseUrl = "https://animepahe.ru"
+    override val configKeyDomain: ConfigKey.Domain = ConfigKey.Domain("animepahe.ru")
 
-    override suspend fun getAnimeList(filter: AnimeListFilter): List<Anime> {
+    override suspend fun getList(offset: Int, order: SortOrder, filter: AnimeListFilter): List<Anime> {
         val page = filter.page
         val query = filter.query
         val url = if (!query.isNullOrBlank()) {
-            "$baseUrl/api?m=search&q=$query"
+            "https://$domain/api?m=search&q=$query"
         } else {
-            "$baseUrl/api?m=airing&page=$page"
+            "https://$domain/api?m=airing&page=$page"
         }
 
         val doc = fetchDocument(url)
@@ -36,7 +39,7 @@ internal class Animepahe(context: AnimeLoaderContext) : ParsedAnimeParser(contex
             Anime(
                 id = href,
                 title = title,
-                url = if (href.startsWith("http")) href else "$baseUrl$href",
+                url = if (href.startsWith("http")) href else "https://$domain$href",
                 coverUrl = img,
             )
         }
@@ -66,7 +69,7 @@ internal class Animepahe(context: AnimeLoaderContext) : ParsedAnimeParser(contex
                 id = href,
                 name = epName.ifBlank { "Episode ${epNum.toInt()}" },
                 episodeNumber = epNum,
-                url = if (href.startsWith("http")) href else "$baseUrl$href",
+                url = if (href.startsWith("http")) href else "https://$domain$href",
             )
         }
     }

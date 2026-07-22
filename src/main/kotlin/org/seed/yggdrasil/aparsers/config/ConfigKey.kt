@@ -1,0 +1,34 @@
+package org.seed.yggdrasil.aparsers.config
+
+public sealed class ConfigKey<T>(
+    @JvmField public val key: String,
+) {
+    public abstract val defaultValue: T
+
+    public class Domain(
+        @JvmField @JvmSuppressWildcards public vararg val presetValues: String,
+    ) : ConfigKey<String>("domain") {
+        init {
+            require(presetValues.isNotEmpty()) { "You must provide at least one domain" }
+        }
+
+        override val defaultValue: String
+            get() = presetValues.first()
+    }
+
+    public class ShowSuspiciousContent(
+        override val defaultValue: Boolean,
+    ) : ConfigKey<Boolean>("show_suspicious")
+
+    public class UserAgent(
+        override val defaultValue: String,
+    ) : ConfigKey<String>("user_agent")
+
+    public class DisableUpdateChecking(
+        override val defaultValue: Boolean = false,
+    ) : ConfigKey<Boolean>("disable_updates")
+
+    public class InterceptCloudflare(
+        override val defaultValue: Boolean = false,
+    ) : ConfigKey<Boolean>("intercept_cloudflare")
+}
